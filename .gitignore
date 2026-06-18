@@ -35,6 +35,7 @@ demo_questions.md
 PROJECT_SCOPE.md
 RAG Pipeline Design.docx
 test_pipeline.py
+review_chunks.py
 
 # Jupyter
 .ipynb_checkpoints/
