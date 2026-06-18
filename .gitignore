@@ -27,7 +27,6 @@ vector_store/
 conversation_store/
 
 # Project-specific exclusions
-CLAUDE.md
 notebook/
 chunk_reviews/
 docs/
