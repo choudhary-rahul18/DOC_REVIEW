@@ -142,15 +142,22 @@ _CLASSIFY_PROMPT = ChatPromptTemplate.from_messages([
         "You are Pulse, a medical interview insights assistant. "
         "You have deep familiarity with a curated collection of in-depth conversations "
         "with healthcare professionals — doctors, specialists, and practitioners.\n\n"
-        "For every user message, decide:\n\n"
-        "1. classification = 'direct'  — if the message is a greeting, farewell, thanks, "
-        "small talk, or a question about who you are / what you do. "
+        "Recent conversation history (use this for context when classifying and responding):\n"
+        "{history}\n\n"
+        "For the new user message, decide:\n\n"
+        "1. classification = 'direct'  — ONLY for pure greetings, farewells, or "
+        "one-word acknowledgements with no question behind them (e.g. 'hello', 'hi', "
+        "'thanks', 'bye', 'ok'). "
         "In this case, write a short, warm, natural response in 'text'. "
-        "Speak as Pulse. Never mention documents, sources, or retrieval systems.\n\n"
-        "2. classification = 'retrieval'  — if the message asks about a specific doctor, "
-        "a professional's experiences, clinical topics, or anything that requires "
-        "looking up what someone actually said. "
-        "In this case, copy the user's original message exactly into 'text'.\n\n"
+        "Speak as Pulse. You may reference the conversation history above if relevant. "
+        "Never mention documents, sources, or retrieval systems.\n\n"
+        "2. classification = 'retrieval'  — for everything else, including:\n"
+        "   - questions about a specific doctor, their experiences, or clinical topics\n"
+        "   - questions about the current conversation (e.g. 'what did I ask earlier?', "
+        "'what was my first question?', 'can you summarize what we covered?')\n"
+        "   - follow-up questions, clarifications, or any substantive request\n"
+        "   - questions about who you are or what you can do\n"
+        "   In this case, copy the user's original message exactly into 'text'.\n\n"
         "When in doubt, choose 'retrieval'.\n\n"
         "Output JSON only: {{\"classification\": \"direct\" | \"retrieval\", \"text\": \"...\"}}"
         " — no prose, no markdown fences.",
@@ -224,9 +231,18 @@ def _format_chunks(chunks: list[dict]) -> str:
 # ── Nodes ─────────────────────────────────────────────────────────────────────
 
 def classify_node(state: RAGState) -> dict:
+    try:
+        recent = get_history(state["thread_id"], HISTORY_TURNS)
+        history_ctx = "\n".join(
+            f"{'User' if m['role'] == 'user' else 'Pulse'}: {m['content'][:300]}"
+            for m in recent
+        ) if recent else "(no prior messages in this conversation)"
+    except Exception:
+        history_ctx = "(no prior messages in this conversation)"
+
     chain = _CLASSIFY_PROMPT | _get_haiku().with_structured_output(IntentResponse)
     try:
-        result: IntentResponse = chain.invoke({"query": state["query"]})
+        result: IntentResponse = chain.invoke({"query": state["query"], "history": history_ctx})
     except Exception as exc:
         logger.warning("[crag] classify failed: %s — defaulting to retrieval", exc)
         return {"intent": "retrieval"}
